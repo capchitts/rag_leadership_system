@@ -1,6 +1,13 @@
 from evaluation.retrieval_metrics import precision_at_k, recall_at_k
 from evaluation.faithfulness import evaluate_faithfulness
 from evaluation.groundedness import evaluate_groundedness
+from core.schemas import (
+    EvaluationResult,
+    FaithfulnessResult,
+    GroundednessResult,
+    RetrievalMetricsResult,
+    Chunk,
+)
 
 
 class RAGEvaluator:
@@ -9,22 +16,39 @@ class RAGEvaluator:
 
     def evaluate(
         self,
-        query,
-        retrieved_chunks,
-        answer,
-        context,
+        query: str,
+        retrieved_chunks: list[Chunk],
+        answer: str,
+        context: str,
         relevant_chunk_ids=None,
-    ):
-        results = {}
+    ) -> EvaluationResult:
 
-        if relevant_chunk_ids is not None:
-            results["precision@5"] = precision_at_k(retrieved_chunks, relevant_chunk_ids, 5)
-            results["recall@5"] = recall_at_k(retrieved_chunks, relevant_chunk_ids, 5)
+        if relevant_chunk_ids:
+            precision_value = precision_at_k(retrieved_chunks, relevant_chunk_ids, 5)
+            recall_value = recall_at_k(retrieved_chunks, relevant_chunk_ids, 5)
         else:
-            results["precision@5"] = "N/A (no labeled relevant_chunk_ids provided)"
-            results["recall@5"] = "N/A (no labeled relevant_chunk_ids provided)"
+            precision_value = "N/A (no labeled relevant_chunk_ids provided)"
+            recall_value = "N/A (no labeled relevant_chunk_ids provided)"
 
-        results["faithfulness"] = evaluate_faithfulness(self.llm, answer, context)
-        results["groundedness"] = evaluate_groundedness(self.llm, answer, context)
+        retrieval_result = RetrievalMetricsResult(
+            precision_at_5=precision_value,
+            recall_at_5=recall_value,
+            mrr=None,
+            ndcg_at_5=None,
+        )
 
-        return results
+        faithfulness_result = evaluate_faithfulness(self.llm, answer, context)
+        groundedness_result = evaluate_groundedness(self.llm, answer, context)
+
+        if isinstance(faithfulness_result, dict):
+            faithfulness_result = FaithfulnessResult.model_validate(faithfulness_result)
+
+        if isinstance(groundedness_result, dict):
+            groundedness_result = GroundednessResult.model_validate(groundedness_result)
+
+        return EvaluationResult(
+            query=query,
+            retrieval=retrieval_result,
+            faithfulness=faithfulness_result,
+            groundedness=groundedness_result,
+        )

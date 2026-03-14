@@ -12,7 +12,7 @@ class Reranker:
         pairs = []
 
         for chunk in chunks:
-            pairs.append([query, chunk["text"]])
+            pairs.append([query, chunk.text])
 
         scores = self.model.predict(pairs)
 

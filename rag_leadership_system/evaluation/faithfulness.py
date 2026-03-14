@@ -1,23 +1,49 @@
-def evaluate_faithfulness(llm, answer, context):
+import re
+import json
+from prompts.faithfulness_prompt import build_faithfulness_prompt
+from core.schemas import FaithfulnessResult
 
-    prompt = f"""
-                You are evaluating whether the answer is supported by the provided context.
 
-                Context:
-                {context}
+def _extract_json(raw_response: str):
+    """
+    Extract JSON from LLM response.
+    Handles markdown code blocks and stray text.
+    """
+    if not raw_response:
+        raise ValueError("Empty LLM response")
 
-                Answer:
-                {answer}
+    text = raw_response.strip()
 
-                Question:
-                Is the answer fully supported by the context?
+    # remove markdown fences
+    text = re.sub(r"^```json", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"^```", "", text)
+    text = re.sub(r"```$", "", text)
 
-                Respond with:
-                Faithful
-                or
-                Not Faithful
-            """
+    # extract first json object
+    start = text.find("{")
+    end = text.rfind("}")
 
-    response = llm.invoke(prompt)
+    if start == -1 or end == -1:
+        raise ValueError("No JSON object found")
 
-    return response
+    return text[start:end + 1]
+
+
+def evaluate_faithfulness(llm, answer: str, context: str) -> FaithfulnessResult:
+    prompt = build_faithfulness_prompt(answer=answer, context=context)
+    raw_response = llm.invoke(prompt)
+
+    try:
+        json_text = _extract_json(raw_response)
+        parsed = json.loads(json_text)
+
+        return FaithfulnessResult.model_validate(parsed)
+
+    except Exception:
+        return FaithfulnessResult(
+            faithfulness_score=None,
+            directly_supported_claims=[],
+            partially_supported_claims=[],
+            unsupported_claims=[],
+            summary=f"Failed to parse JSON response: {raw_response}",
+        )

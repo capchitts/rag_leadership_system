@@ -1,28 +1,35 @@
-from sentence_transformers import SentenceTransformer
-import numpy as np
+import json
+import re
+
+from core.schemas import QueryExpansionResult
+from prompts.query_expansion_prompt import build_query_expansion_prompt
 
 
-class QueryExpander:
+def extract_json_text(raw_response: str) -> str:
+    text = raw_response.strip()
+    text = re.sub(r"^```json", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"^```", "", text)
+    text = re.sub(r"```$", "", text)
 
-    def __init__(self):
+    start = text.find("{")
+    end = text.rfind("}")
 
-        self.model = SentenceTransformer(
-            "sentence-transformers/all-MiniLM-L6-v2"
-        )
+    if start == -1 or end == -1 or end <= start:
+        raise ValueError("No valid JSON found")
 
-    def expand(self, query):
+    return text[start:end + 1]
 
-        templates = [
 
-            f"{query}",
+class LLMQueryExpander:
+    def __init__(self, llm):
+        self.llm = llm
 
-            f"Key insights about {query}",
+    def expand(self, query: str):
+        prompt = build_query_expansion_prompt(query)
+        raw_response = self.llm.invoke(prompt)
 
-            f"Important information regarding {query}",
+        json_text = extract_json_text(raw_response)
+        parsed = json.loads(json_text)
 
-            f"Detailed explanation of {query}",
-
-            f"Major issues related to {query}"
-        ]
-
-        return templates
+        result = QueryExpansionResult.model_validate(parsed)
+        return result.expanded_queries

@@ -1,13 +1,14 @@
 from __future__ import annotations
 
+from config import settings
+from evaluation.evaluator import RAGEvaluator
 from pipeline.rag_pipeline import build_pipeline
-from generation.context_builder import build_context
 from generation.context_packer import pack_context
 from generation.insight_generator import generate_insight
 from prompts.executive_report_prompt import build_executive_report_prompt
-from evaluation.evaluator import RAGEvaluator
-from config import settings
 from llm.llm_client import get_llm_client, load_llm_config_from_settings
+
+
 
 def run_demo() -> None:
     print("\nBuilding RAG pipeline...\n")
@@ -42,7 +43,6 @@ def run_demo() -> None:
             print("No chunks left after reranking.")
             continue
 
-        built_context = build_context(top_chunks)
         packed_context = pack_context(top_chunks)
 
         system_prompt, user_prompt = build_executive_report_prompt(
@@ -52,19 +52,17 @@ def run_demo() -> None:
 
         final_report = generate_insight(query, top_chunks)
 
-        print("\n===== BUILT CONTEXT =====\n")
-        print(built_context)
+        print("\n===== PACKED CONTEXT =====\n")
+        print(packed_context)
 
         print("\n===== RETRIEVED CHUNKS =====\n")
         for idx, chunk in enumerate(top_chunks, start=1):
-            metadata = chunk.get("metadata", {})
+            metadata = chunk.metadata
             print(f"[Chunk {idx}]")
-            print(f"Source : {metadata.get('source', 'unknown')}")
-            print(f"Page   : {metadata.get('page', 'unknown')}")
-            print(f"Section: {metadata.get('section', 'general')}")
-            if chunk.get("score") is not None:
-                print(f"Score  : {chunk.get('score')}")
-            print(f"Text   : {chunk.get('text', '')[:800]}")
+            print(f"Source : {metadata.source or 'unknown'}")
+            print(f"Page   : {metadata.page or 'unknown'}")
+            print(f"Section: {metadata.section or 'general'}")
+            print(f"Text   : {chunk.text[:800]}")
             print("-" * 80)
 
         print("\n===== PACKED CONTEXT =====\n")

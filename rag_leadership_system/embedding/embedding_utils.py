@@ -1,12 +1,12 @@
 def build_embedding_text(chunk):
 
-    metadata = chunk["metadata"]
+    metadata = chunk.metadata
 
-    section = metadata.get("section", "general")
-    source = metadata.get("source", "")
-    page = metadata.get("page", "")
+    section = metadata.section or "general"
+    source = metadata.source or ""
+    page = metadata.page or ""
 
-    text = chunk["text"]
+    text = chunk.text
 
     enriched_text = f"""
     Document: {source}
