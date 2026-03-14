@@ -1,0 +1,35 @@
+# Core parsing and PDF ingestion
+pdfplumber>=0.11.0
+pymupdf>=1.24.0
+camelot-py[cv]>=0.11.0
+tabulate>=0.9.0
+pillow>=10.0.0
+
+# Text processing / chunking
+nltk>=3.8.1
+regex>=2024.5.15
+
+# Embeddings / retrieval
+sentence-transformers>=3.0.0
+faiss-cpu>=1.8.0
+rank-bm25>=0.2.2
+numpy>=1.26.0
+scikit-learn>=1.4.0
+
+# Reranking
+transformers>=4.41.0
+torch>=2.2.0
+
+# LLM clients
+requests>=2.31.0
+python-dotenv>=1.0.1
+
+# Evaluation / utilities
+pandas>=2.2.2
+tqdm>=4.66.0
+
+# Optional: Google Gemini SDK if you later switch from raw requests
+google-generativeai>=0.8.0
+
+# Optional: Hugging Face Hub helpers
+huggingface-hub>=0.23.0
