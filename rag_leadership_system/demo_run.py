@@ -36,7 +36,7 @@ def run_demo() -> None:
             print("No chunks retrieved.")
             continue
 
-        top_chunks = reranker.rerank(query, candidates)
+        top_chunks = reranker.rerank(query, candidates,top_k=settings.RERANK_TOP_K)
         print(f"Reranked to {len(top_chunks)} final chunks.")
 
         if not top_chunks:

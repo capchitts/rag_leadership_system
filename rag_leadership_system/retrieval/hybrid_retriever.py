@@ -1,5 +1,5 @@
 from typing import Dict, List
-
+from config import settings
 from core.schemas import Chunk, QueryPlan, RetrievalCandidate, RetrievalScores
 
 
@@ -19,23 +19,25 @@ class HybridRetriever:
         bm25_index,
         embedder,
         query_analyzer,
-        query_expander=None,
-        vector_top_k: int = 10,
-        bm25_top_k: int = 10,
+        query_expander,
+        vector_top_k,
+        bm25_top_k,
+        final_retriever_k
     ):
         self.vector_index = vector_index
         self.bm25_index = bm25_index
         self.embedder = embedder
         self.query_analyzer = query_analyzer
-        self.query_expander = query_expander
+        self.query_expander = query_expander if settings.ENABLE_QUERY_EXPANSION else None
         self.vector_top_k = vector_top_k
         self.bm25_top_k = bm25_top_k
+        self.final_retriever_k = final_retriever_k
 
-    def retrieve(self, query: str, k: int = 10) -> List[Chunk]:
-        result = self.retrieve_with_debug(query=query, k=k)
+    def retrieve(self, query: str) -> List[Chunk]:
+        result = self.retrieve_with_debug(query=query)
         return result["results"]
 
-    def retrieve_with_debug(self, query: str, k: int = 10):
+    def retrieve_with_debug(self, query: str):
         analysis = self.query_analyzer.analyze(query)
 
         query_variants = [query]
@@ -89,13 +91,13 @@ class HybridRetriever:
             reverse=True
         )
 
-        final_chunks = [candidate.chunk for candidate in ranked_candidates[:k]]
+        final_chunks = [candidate.chunk for candidate in ranked_candidates[:self.final_retriever_k]]
 
         return {
             "query_plan": QueryPlan.model_validate(analysis.model_dump() if hasattr(analysis, "model_dump") else analysis.__dict__),
             "query_variants": query_variants,
             "trace": trace,
-            "scored_results": ranked_candidates[:k],
+            "scored_results": ranked_candidates[:self.final_retriever_k],
             "results": final_chunks,
         }
 

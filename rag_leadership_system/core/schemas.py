@@ -254,10 +254,10 @@ class GroundednessResult(SchemaBase):
 
 
 class RetrievalMetricsResult(SchemaBase):
-    precision_at_5: Union[str, float] = "N/A"
-    recall_at_5: Union[str, float] = "N/A"
+    precision_at_k: Union[str, float] = "N/A"
+    recall_at_k: Union[str, float] = "N/A"
     mrr: Optional[float] = None
-    ndcg_at_5: Optional[float] = None
+    ndcg_at_k: Optional[float] = None
 
 
 class EvaluationResult(SchemaBase):
@@ -314,12 +314,10 @@ class PipelineTrace(SchemaBase):
 # ============================================================
 # Helper Constructors
 # ============================================================
-
 def make_chunk_id(source: str, page: Optional[int], chunk_index: int) -> str:
     safe_source = source.replace(".pdf", "").replace(" ", "_")
     page_part = f"p{page}" if page is not None else "px"
     return f"{safe_source}_{page_part}_c{chunk_index}"
-
 
 
 

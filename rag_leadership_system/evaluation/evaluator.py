@@ -31,10 +31,10 @@ class RAGEvaluator:
             recall_value = "N/A (no labeled relevant_chunk_ids provided)"
 
         retrieval_result = RetrievalMetricsResult(
-            precision_at_5=precision_value,
-            recall_at_5=recall_value,
+            precision_at_k=precision_value,
+            recall_at_k=recall_value,
             mrr=None,
-            ndcg_at_5=None,
+            ndcg_at_k=None,
         )
 
         faithfulness_result = evaluate_faithfulness(self.llm, answer, context)

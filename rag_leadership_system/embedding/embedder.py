@@ -1,12 +1,12 @@
 from sentence_transformers import SentenceTransformer
 from embedding.embedding_utils import build_embedding_text
-
+from config import settings
 
 class Embedder:
 
     def __init__(self):
 
-        self.model = SentenceTransformer("BAAI/bge-large-en")
+        self.model = SentenceTransformer(settings.EMBEDDING_MODEL)
 
     def embed_chunks(self, chunks):
 

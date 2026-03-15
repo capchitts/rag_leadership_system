@@ -1,13 +1,13 @@
 from sentence_transformers import CrossEncoder
-
+from config import settings
 
 class Reranker:
 
     def __init__(self):
 
-        self.model = CrossEncoder("BAAI/bge-reranker-large")
+        self.model = CrossEncoder(settings.RERANKER_MODEL)
 
-    def rerank(self, query, chunks, top_k=5):
+    def rerank(self, query, chunks, top_k=settings.RERANK_TOP_K):
 
         pairs = []
 

@@ -36,9 +36,10 @@ def build_pipeline(data_folder):
         bm25_index=bm25_index,
         embedder=embedder,
         query_analyzer=query_analyzer,
-        query_expander=query_expander,
-        vector_top_k=12,
-        bm25_top_k=12,
+        query_expander=query_expander if settings.ENABLE_QUERY_EXPANSION else None,
+        vector_top_k=settings.VECTOR_TOP_K,
+        bm25_top_k=settings.BM25_TOP_K,
+        final_retriever_k=settings.FINAL_RETRIEVAL_K
     )
 
     reranker = Reranker()
