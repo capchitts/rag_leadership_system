@@ -20,11 +20,12 @@ def pack_context(
     - schema-safe attribute access
     - groups by section
     - attaches citation labels
+    - includes section type hints for the LLM
     - limits context size
     - skips empty chunks
     """
 
-    section_map: Dict[str, List[Tuple[str, str]]] = defaultdict(list)
+    section_map: Dict[str, List[Tuple[str, str, str]]] = defaultdict(list)
     used_chars = 0
     structured_context = ""
 
@@ -40,7 +41,9 @@ def pack_context(
         chunk_id = chunk.chunk_id or metadata.chunk_id or "unknown_chunk"
 
         citation_label = f"[{chunk_id} | {source} | p.{page} | {section}]"
-        section_map[section].append((citation_label, text))
+        section_type_hint = f"Section Type: {section}"
+
+        section_map[section].append((citation_label, section_type_hint, text))
 
     for section, items in section_map.items():
         section_header = f"\n=== {section.upper()} ===\n"
@@ -51,8 +54,8 @@ def pack_context(
         structured_context += section_header
         used_chars += len(section_header)
 
-        for citation_label, text in items[:max_chunks_per_section]:
-            bullet = f"- {citation_label}\n{text}\n\n"
+        for citation_label, section_type_hint, text in items[:max_chunks_per_section]:
+            bullet = f"- {citation_label}\n{section_type_hint}\n{text}\n\n"
 
             if used_chars + len(bullet) > max_chars:
                 return structured_context.strip()

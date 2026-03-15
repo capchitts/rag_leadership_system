@@ -1,7 +1,11 @@
 import re
 import json
+
 from prompts.faithfulness_prompt import build_faithfulness_prompt
 from core.schemas import FaithfulnessResult
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 def _extract_json(raw_response: str):
@@ -14,12 +18,10 @@ def _extract_json(raw_response: str):
 
     text = raw_response.strip()
 
-    # remove markdown fences
     text = re.sub(r"^```json", "", text, flags=re.IGNORECASE)
     text = re.sub(r"^```", "", text)
     text = re.sub(r"```$", "", text)
 
-    # extract first json object
     start = text.find("{")
     end = text.rfind("}")
 
@@ -30,6 +32,11 @@ def _extract_json(raw_response: str):
 
 
 def evaluate_faithfulness(llm, answer: str, context: str) -> FaithfulnessResult:
+    logger.info(
+        "Faithfulness evaluation started",
+        extra={"extra_data": {"answer_chars": len(answer), "context_chars": len(context)}},
+    )
+
     prompt = build_faithfulness_prompt(answer=answer, context=context)
     raw_response = llm.invoke(prompt)
 
@@ -37,9 +44,28 @@ def evaluate_faithfulness(llm, answer: str, context: str) -> FaithfulnessResult:
         json_text = _extract_json(raw_response)
         parsed = json.loads(json_text)
 
-        return FaithfulnessResult.model_validate(parsed)
+        result = FaithfulnessResult.model_validate(parsed)
 
-    except Exception:
+        logger.info(
+            "Faithfulness evaluation completed",
+            extra={
+                "extra_data": {
+                    "faithfulness_score": result.faithfulness_score,
+                    "direct_supported_count": len(result.directly_supported_claims),
+                    "partial_supported_count": len(result.partially_supported_claims),
+                    "unsupported_count": len(result.unsupported_claims),
+                }
+            },
+        )
+
+        return result
+
+    except Exception as e:
+        logger.warning(
+            "Faithfulness evaluation parsing failed",
+            extra={"extra_data": {"error": str(e), "raw_response": raw_response[:1000]}},
+        )
+
         return FaithfulnessResult(
             faithfulness_score=None,
             directly_supported_claims=[],

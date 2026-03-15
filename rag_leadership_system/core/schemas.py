@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Literal, Optional, Union
 from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator, conint, confloat
 
+
 # ============================================================
 # Base / Shared
 # ============================================================
@@ -260,11 +261,21 @@ class RetrievalMetricsResult(SchemaBase):
     ndcg_at_k: Optional[float] = None
 
 
+class EvaluationDiagnosticsResult(SchemaBase):
+    has_relevant_in_top_k: Optional[bool] = None
+    retrieval_failure: Optional[bool] = None
+    unsupported_claim_count: int = 0
+    partially_supported_claim_count: int = 0
+    unsupported_statement_count: int = 0
+    hallucination_detected: bool = False
+
+
 class EvaluationResult(SchemaBase):
     query: str
     retrieval: RetrievalMetricsResult
     faithfulness: FaithfulnessResult
     groundedness: GroundednessResult
+    diagnostics: Optional[EvaluationDiagnosticsResult] = None
 
 
 # ============================================================
@@ -314,20 +325,19 @@ class PipelineTrace(SchemaBase):
 # ============================================================
 # Helper Constructors
 # ============================================================
+
 def make_chunk_id(source: str, page: Optional[int], chunk_index: int) -> str:
     safe_source = source.replace(".pdf", "").replace(" ", "_")
     page_part = f"p{page}" if page is not None else "px"
     return f"{safe_source}_{page_part}_c{chunk_index}"
 
 
-
-
-class ExecutiveBullet(BaseModel):
+class ExecutiveBullet(SchemaBase):
     text: str = Field(..., min_length=1)
     citations: List[str] = Field(default_factory=list)
 
 
-class ExecutiveReportResult(BaseModel):
+class ExecutiveReportResult(SchemaBase):
     executive_summary: List[ExecutiveBullet] = Field(default_factory=list)
     top_risks: List[ExecutiveBullet] = Field(default_factory=list)
     top_opportunities: List[ExecutiveBullet] = Field(default_factory=list)
@@ -335,5 +345,5 @@ class ExecutiveReportResult(BaseModel):
     supporting_evidence: List[ExecutiveBullet] = Field(default_factory=list)
 
 
-class QueryExpansionResult(BaseModel):
+class QueryExpansionResult(SchemaBase):
     expanded_queries: List[str] = Field(default_factory=list, min_length=1, max_length=5)

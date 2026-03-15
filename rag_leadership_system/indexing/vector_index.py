@@ -1,6 +1,9 @@
+# indexing/vector_index.py
 from __future__ import annotations
 
 from typing import List, Tuple
+import pickle
+from pathlib import Path
 
 import faiss
 import numpy as np
@@ -66,6 +69,27 @@ class VectorIndex:
             results.append((self.chunk_store[idx], float(score)))
 
         return results
+
+    def save(self, index_path: str, store_path: str) -> None:
+        Path(index_path).parent.mkdir(parents=True, exist_ok=True)
+        Path(store_path).parent.mkdir(parents=True, exist_ok=True)
+
+        faiss.write_index(self.index, index_path)
+
+        with open(store_path, "wb") as f:
+            pickle.dump(self.chunk_store, f)
+
+    @classmethod
+    def load(cls, index_path: str, store_path: str):
+        index = faiss.read_index(index_path)
+
+        with open(store_path, "rb") as f:
+            chunk_store = pickle.load(f)
+
+        obj = cls(index.d)
+        obj.index = index
+        obj.chunk_store = chunk_store
+        return obj
 
     def __len__(self) -> int:
         return self.index.ntotal

@@ -73,6 +73,59 @@ class QueryAnalyzer:
         "why",
         "how",
         "what happens",
+        "recommendation",
+        "recommendations",
+        "evidence-backed",
+        "management",
+        "immediately",
+        "growth potential",
+        "operational risk",
+        "opportunity",
+        "opportunities",
+        "strategic",
+        "strategy",
+        "act on",
+        "indicate",
+        "future",
+        "vs",
+        "versus",
+        "compare",
+        "comparison",
+    }
+
+    COMPARISON_HINTS = {
+        "vs",
+        "versus",
+        "compare",
+        "comparison",
+        "difference",
+        "differences",
+        "relative to",
+    }
+
+    ACTION_HINTS = {
+        "recommendation",
+        "recommendations",
+        "act on",
+        "immediately",
+        "management should",
+        "what should",
+        "next steps",
+        "actions",
+        "priorities",
+    }
+
+    STRATEGIC_HINTS = {
+        "growth potential",
+        "operational risk",
+        "strategic risk",
+        "strategic risks",
+        "opportunity",
+        "opportunities",
+        "leadership",
+        "management",
+        "future growth",
+        "watch areas",
     }
 
     def analyze(self, query: str) -> QueryAnalysis:
@@ -83,32 +136,53 @@ class QueryAnalyzer:
         has_year = bool(re.search(r"\b(19|20)\d{2}\b", normalized))
         has_number = bool(re.search(r"\b\d+(?:\.\d+)?\b", normalized))
         has_quoted_text = '"' in query or "'" in query
-        has_code_like_token = bool(re.search(r"\b[a-zA-Z]+[-_][a-zA-Z0-9_-]+\b", query)) or bool(
-            re.search(r"\b[a-zA-Z0-9]{6,}\b", query)
+
+        # Strict structured token detection only
+        has_code_like_token = (
+            bool(re.search(r"\b[a-zA-Z]{2,}-\d{2,}\b", query)) or
+            bool(re.search(r"\b[a-zA-Z]{2,}_[a-zA-Z0-9]{2,}\b", query)) or
+            bool(re.search(r"\b[A-Z0-9]{6,}\b", query))
         )
 
-        exact_keyword_match = any(k in normalized for k in self.EXACT_KEYWORDS)
-        table_keyword_match = any(k in normalized for k in self.TABLE_KEYWORDS)
-        semantic_hint_match = any(k in normalized for k in self.SEMANTIC_HINTS)
+        exact_keyword_match = any(self._contains_phrase(normalized, k) for k in self.EXACT_KEYWORDS)
+        table_keyword_match = any(self._contains_phrase(normalized, k) for k in self.TABLE_KEYWORDS)
+        semantic_hint_match = any(self._contains_phrase(normalized, k) for k in self.SEMANTIC_HINTS)
+        comparison_hint_match = any(self._contains_phrase(normalized, k) for k in self.COMPARISON_HINTS)
+        action_hint_match = any(self._contains_phrase(normalized, k) for k in self.ACTION_HINTS)
+        strategic_hint_match = any(self._contains_phrase(normalized, k) for k in self.STRATEGIC_HINTS)
 
-        # -------- classify query --------
-        if table_keyword_match and (has_number or has_year or "plan" in normalized):
+        starts_with_wh = normalized.startswith(
+            ("what", "which", "why", "how", "when", "where")
+        )
+
+        if table_keyword_match and (has_number or has_year or self._contains_phrase(normalized, "plan")):
             query_type = "table_lookup"
             reasons.append("Detected pricing/table-style query.")
+
         elif exact_keyword_match or has_quoted_text or has_code_like_token:
             query_type = "exact_lookup"
             reasons.append("Detected exact/structured lookup query.")
+
+        elif comparison_hint_match or action_hint_match or strategic_hint_match:
+            query_type = "natural_language_detailed"
+            reasons.append("Detected strategic/comparison/action-oriented query.")
+
+        elif starts_with_wh and semantic_hint_match:
+            query_type = "natural_language_detailed"
+            reasons.append("Detected WH-style semantic question.")
+
         elif word_count <= 4 and not has_number:
             query_type = "semantic_broad"
             reasons.append("Very short query without numeric constraints.")
-        elif word_count >= 10 or semantic_hint_match:
+
+        elif word_count >= 8 or semantic_hint_match:
             query_type = "natural_language_detailed"
             reasons.append("Detailed natural-language question.")
+
         else:
             query_type = "standard"
             reasons.append("General balanced retrieval query.")
 
-        # -------- decide retrieval strategy --------
         if query_type == "exact_lookup":
             should_expand = False
             use_bm25 = True
@@ -140,17 +214,17 @@ class QueryAnalyzer:
             should_expand = False
             use_bm25 = True
             use_vector = True
-            bm25_weight = 0.45
-            vector_weight = 0.55
+            bm25_weight = 0.40
+            vector_weight = 0.60
             max_expansions = 1
-            reasons.append("Detailed query already contains enough semantics.")
+            reasons.append("Favor semantic retrieval for synthesis/comparison questions.")
 
-        else:  # standard
+        else:
             should_expand = True if word_count <= 6 and not has_year and not has_number else False
             use_bm25 = True
             use_vector = True
-            bm25_weight = 0.20
-            vector_weight = 0.80
+            bm25_weight = 0.50
+            vector_weight = 0.50
             max_expansions = 2 if should_expand else 1
             reasons.append("Balanced hybrid retrieval strategy.")
 
@@ -170,8 +244,13 @@ class QueryAnalyzer:
     @staticmethod
     def _normalize(text: str) -> str:
         text = text.lower().strip()
+        text = re.sub(r"^\d+\.\s*", "", text)
         text = re.sub(r"\s+", " ", text)
         return text
+
+    @staticmethod
+    def _contains_phrase(text: str, phrase: str) -> bool:
+        return re.search(rf"\b{re.escape(phrase)}\b", text) is not None
 
     def as_dict(self, analysis: QueryAnalysis) -> Dict:
         return {

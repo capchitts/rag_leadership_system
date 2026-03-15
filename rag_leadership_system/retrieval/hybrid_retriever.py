@@ -1,6 +1,9 @@
-from typing import Dict, List
+from typing import Any, Dict, List
 from config import settings
 from core.schemas import Chunk, QueryPlan, RetrievalCandidate, RetrievalScores
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class HybridRetriever:
@@ -10,7 +13,7 @@ class HybridRetriever:
     - optional query expansion
     - vector retrieval
     - BM25 retrieval
-    - weighted score fusion
+    - Reciprocal Rank Fusion (RRF)
     """
 
     def __init__(
@@ -22,7 +25,8 @@ class HybridRetriever:
         query_expander,
         vector_top_k,
         bm25_top_k,
-        final_retriever_k
+        final_retriever_k,
+        rrf_k: int | None = None,
     ):
         self.vector_index = vector_index
         self.bm25_index = bm25_index
@@ -32,23 +36,42 @@ class HybridRetriever:
         self.vector_top_k = vector_top_k
         self.bm25_top_k = bm25_top_k
         self.final_retriever_k = final_retriever_k
+        self.rrf_k = rrf_k if rrf_k is not None else settings.RRF_K
 
     def retrieve(self, query: str) -> List[Chunk]:
         result = self.retrieve_with_debug(query=query)
         return result["results"]
 
     def retrieve_with_debug(self, query: str):
+
+        logger.info("Hybrid retrieval started", extra={"extra_data": {"query": query}})
+
         analysis = self.query_analyzer.analyze(query)
 
+        logger.info(
+            "Query analyzed",
+            extra={
+                "extra_data": {
+                    "query": query,
+                    "analysis": analysis.model_dump() if hasattr(analysis, "model_dump") else analysis.__dict__,
+                }
+            },
+        )
+
         query_variants = [query]
+
         if analysis.should_expand and self.query_expander is not None:
             query_variants = self.query_expander.expand(
                 query,
                 max_expansions=analysis.max_expansions
             )
 
-        aggregated: Dict[str, RetrievalCandidate] = {}
+        logger.info(
+            "Query expansion complete",
+            extra={"extra_data": {"query_variants": query_variants}},
+        )
 
+        aggregated: Dict[str, RetrievalCandidate] = {}
         trace = []
 
         for q in query_variants:
@@ -62,27 +85,36 @@ class HybridRetriever:
             if analysis.use_bm25:
                 bm25_results = self.bm25_index.search(q, self.bm25_top_k)
 
-            normalized_vector = self._normalize_results(vector_results, source="vector")
-            normalized_bm25 = self._normalize_results(bm25_results, source="bm25")
+            logger.info(
+                "Raw retrieval results",
+                extra={
+                    "extra_data": {
+                        "query_variant": q,
+                        "vector_results": len(vector_results),
+                        "bm25_results": len(bm25_results),
+                    }
+                },
+            )
 
-            self._accumulate_scores(
+            ranked_vector = self._ranked_results(vector_results, source="vector")
+            ranked_bm25 = self._ranked_results(bm25_results, source="bm25")
+
+            self._accumulate_rrf_scores(
                 aggregated=aggregated,
-                normalized_results=normalized_vector,
-                weight=analysis.vector_weight,
+                ranked_results=ranked_vector,
                 score_field="vector_score",
             )
 
-            self._accumulate_scores(
+            self._accumulate_rrf_scores(
                 aggregated=aggregated,
-                normalized_results=normalized_bm25,
-                weight=analysis.bm25_weight,
+                ranked_results=ranked_bm25,
                 score_field="bm25_score",
             )
 
             trace.append({
                 "query_variant": q,
-                "vector_results_count": len(normalized_vector),
-                "bm25_results_count": len(normalized_bm25),
+                "vector_results_count": len(ranked_vector),
+                "bm25_results_count": len(ranked_bm25),
             })
 
         ranked_candidates = sorted(
@@ -91,79 +123,79 @@ class HybridRetriever:
             reverse=True
         )
 
-        final_chunks = [candidate.chunk for candidate in ranked_candidates[:self.final_retriever_k]]
+        final_candidates = ranked_candidates[:self.final_retriever_k]
+        final_chunks = [candidate.chunk for candidate in final_candidates]
+
+        logger.info(
+            "Hybrid retrieval completed",
+            extra={
+                "extra_data": {
+                    "query": query,
+                    "candidate_count": len(ranked_candidates),
+                    "final_chunks": [c.chunk.chunk_id for c in final_candidates],
+                }
+            },
+        )
 
         return {
-            "query_plan": QueryPlan.model_validate(analysis.model_dump() if hasattr(analysis, "model_dump") else analysis.__dict__),
+            "query_plan": QueryPlan.model_validate(
+                analysis.model_dump() if hasattr(analysis, "model_dump") else analysis.__dict__
+            ),
             "query_variants": query_variants,
             "trace": trace,
-            "scored_results": ranked_candidates[:self.final_retriever_k],
+            "scored_results": final_candidates,
             "results": final_chunks,
         }
 
-    def _normalize_results(self, results, source: str):
-        """
-        Supports:
-        - List[Chunk]
-        - List[tuple[Chunk, score]]
-        """
-        parsed = []
+    def _ranked_results(self, results: List[Any], source: str) -> List[dict]:
+        ranked = []
 
-        for rank, item in enumerate(results):
-            if isinstance(item, tuple) and len(item) == 2:
-                chunk, score = item
-                parsed.append((chunk, float(score)))
+        for rank, item in enumerate(results, start=1):
+            if isinstance(item, tuple) and len(item) >= 2:
+                chunk, raw_score = item[0], item[1]
+            elif isinstance(item, dict):
+                chunk = item["chunk"]
+                raw_score = item.get("score", 0.0)
             else:
-                chunk = item
-                parsed.append((chunk, 1.0 / (rank + 1)))
+                raise ValueError(
+                    f"Unsupported result format from {source} retriever: {type(item)}"
+                )
 
-        if not parsed:
-            return []
-
-        raw_scores = [score for _, score in parsed]
-        min_score = min(raw_scores)
-        max_score = max(raw_scores)
-
-        normalized = []
-        for chunk, raw_score in parsed:
-            if max_score == min_score:
-                norm_score = 1.0
-            else:
-                norm_score = (raw_score - min_score) / (max_score - min_score)
-
-            normalized.append({
+            ranked.append({
                 "chunk": chunk,
-                "chunk_id": chunk.chunk_id,
+                "rank": rank,
+                "raw_score": float(raw_score) if raw_score is not None else 0.0,
                 "source": source,
-                "raw_score": raw_score,
-                "norm_score": norm_score,
             })
 
-        return normalized
+        return ranked
 
-    def _accumulate_scores(self, aggregated, normalized_results, weight: float, score_field: str):
-        for item in normalized_results:
-            chunk_id = item["chunk_id"]
-            contribution = item["norm_score"] * weight
+    def _accumulate_rrf_scores(
+        self,
+        aggregated: Dict[str, RetrievalCandidate],
+        ranked_results: List[dict],
+        score_field: str,
+    ) -> None:
+        for item in ranked_results:
+            chunk = item["chunk"]
+            rank = item["rank"]
+            raw_score = item["raw_score"]
+
+            chunk_id = chunk.chunk_id
 
             if chunk_id not in aggregated:
                 aggregated[chunk_id] = RetrievalCandidate(
-                    chunk=item["chunk"],
+                    chunk=chunk,
                     scores=RetrievalScores(
-                        bm25_score=0.0,
-                        vector_score=0.0,
+                        vector_score=None,
+                        bm25_score=None,
                         hybrid_score=0.0,
-                        rerank_score=None,
                     ),
-                    retrieved_by=[],
                 )
 
             candidate = aggregated[chunk_id]
 
-            current_val = getattr(candidate.scores, score_field) or 0.0
-            setattr(candidate.scores, score_field, current_val + contribution)
+            setattr(candidate.scores, score_field, raw_score)
 
-            candidate.scores.hybrid_score = (candidate.scores.hybrid_score or 0.0) + contribution
-
-            if item["source"] not in candidate.retrieved_by:
-                candidate.retrieved_by.append(item["source"])
+            rrf_score = 1.0 / (self.rrf_k + rank)
+            candidate.scores.hybrid_score = (candidate.scores.hybrid_score or 0.0) + rrf_score
