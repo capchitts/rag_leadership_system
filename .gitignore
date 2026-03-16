@@ -1,0 +1,109 @@
+# ==============================
+# Python
+# ==============================
+__pycache__/
+*.py[cod]
+*$py.class
+
+# ==============================
+# Virtual Environments
+# ==============================
+venv/
+env/
+ENV/
+.venv/
+
+# ==============================
+# Environment Variables
+# ==============================
+.env
+.env.*
+*.env
+
+# ==============================
+# Python Packaging
+# ==============================
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# ==============================
+# Logs
+# ==============================
+logs/
+*.log
+
+# ==============================
+# Data Files (optional - remove if sample PDFs must be committed)
+# ==============================
+data/
+
+# ==============================
+# Artifacts (Vector indexes / embeddings / chunk stores)
+# ==============================
+artifacts/
+*.faiss
+*.index
+*.pkl
+*.pickle
+*.npy
+*.npz
+
+# ==============================
+# Cache
+# ==============================
+.cache/
+.pytest_cache/
+.mypy_cache/
+
+# ==============================
+# Jupyter
+# ==============================
+.ipynb_checkpoints/
+
+# ==============================
+# Streamlit
+# ==============================
+.streamlit/secrets.toml
+
+# ==============================
+# OS Files
+# ==============================
+.DS_Store
+Thumbs.db
+
+# ==============================
+# IDE / Editor
+# ==============================
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ==============================
+# MongoDB Local Data
+# ==============================
+mongodb_data/
+
+# ==============================
+# Temporary Files
+# ==============================
+tmp/
+temp/
+*.tmp
+
+# ==============================
+# Coverage Reports
+# ==============================
+.coverage
+htmlcov/
+
+# ==============================
+# Optional: Ignore artifact contents but keep folder
+# ==============================
+artifacts/*
+!artifacts/.gitkeep
+
+create_project_structure.py
