@@ -52,6 +52,7 @@ MAX_QUERY_EXPANSIONS = _get_int("MAX_QUERY_EXPANSIONS", 3)
 
 FAISS_INDEX_PATH = _get_str("FAISS_INDEX_PATH", "artifacts/faiss.index")
 FAISS_CHUNK_STORE_PATH = _get_str("FAISS_CHUNK_STORE_PATH", "artifacts/faiss_chunks.pkl")
+BM25_INDEX_PATH = _get_str("BM25_INDEX_PATH", "artifacts/bm25_index.pkl")
 
 MONGODB_URI = _get_str("MONGODB_URI", "mongodb://localhost:27017")
 MONGODB_DB_NAME = _get_str("MONGODB_DB_NAME", "rag_leadership_system")

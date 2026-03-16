@@ -2,11 +2,9 @@ from __future__ import annotations
 
 import re
 from typing import List, Tuple
-
 from rank_bm25 import BM25Okapi
-
 from core.schemas import Chunk
-
+import pickle
 
 class BM25Index:
     """
@@ -51,3 +49,12 @@ class BM25Index:
         Keeps words and numbers, lowercased.
         """
         return re.findall(r"\b\w+\b", text.lower())
+    
+    def save(self, path: str):
+        with open(path, "wb") as f:
+            pickle.dump(self, f)
+
+    @classmethod
+    def load(cls, path: str):
+        with open(path, "rb") as f:
+            return pickle.load(f)
