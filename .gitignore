@@ -17,8 +17,7 @@ ENV/
 # Environment Variables
 # ==============================
 .env
-.env.*
-*.env
+
 
 # ==============================
 # Python Packaging
